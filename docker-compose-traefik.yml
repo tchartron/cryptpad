@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # --------------------------------------------------------------------------------------------------
+  # -------------------- TRAEFIK ---------------------------------------------------------------------
+  # --------------------------------------------------------------------------------------------------
+  traefik:
+    build:
+      context: .
+      dockerfile: traefik/Dockerfile
+      args:
+        - TRAEFIK_VERSION=${TRAEFIK_VERSION:-v3.0}
+    container_name: ${APP:-app}-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${APP:-app}_traefik_http_router.entrypoints=http
+      - traefik.http.routers.${APP:-app}_traefik_http_router.rule=Host(`traefik.${DOMAIN:-tchartron.com}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))
+      - traefik.http.routers.${APP:-app}_traefik_http_router.middlewares=https-redirect@file
+      - traefik.http.routers.${APP:-app}_traefik_https_router.entrypoints=https
+      - traefik.http.routers.${APP:-app}_traefik_https_router.rule=Host(`traefik.${DOMAIN:-tchartron.com}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))
+      - traefik.http.routers.${APP:-app}_traefik_https_router.service=api@internal
+      - traefik.http.routers.${APP:-app}_traefik_https_router.middlewares=https-whitelist@file
+      - traefik.http.routers.${APP:-app}_traefik_https_router.tls=true
+      - traefik.http.routers.${APP:-app}_traefik_https_router.tls.certresolver=letsencrypt
+      - traefik.http.routers.${APP:-app}_traefik_https_router.tls.domains[0].main=traefik.${DOMAIN:-tchartron.com}
+    volumes:
+      - ./traefik/letsencrypt/acme.json:/letsencrypt/acme.json
+      - ./traefik/config/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/config/dynamic_conf.yml:/etc/traefik/dynamic_conf/dynamic_conf.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - default
+
+
+  # --------------------------------------------------------------------------------------------------
+  # -------------------- CPAD ------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------------------------
+  cryptpad:
+    build:
+      context: .
+      dockerfile: cryptpad/Dockerfile
+      args:
+        - CRYPTPAD_VERSION=${CRYPTPAD_VERSION:-1.21.6}
+    container_name: ${APP:-app}-cyptpad
+    restart: unless-stopped
+    labels:
+        - traefik.enable=true
+        - traefik.http.routers.${APP:-app}_http_router.rule=Host(`pad.${DOMAIN:-tchartron.com}`)
+        - traefik.http.routers.${APP:-app}_http_router.entrypoints=http
+        - traefik.http.routers.${APP:-app}_http_router.middlewares=https-redirect@file
+        - traefik.http.routers.${APP:-app}_http_router.service=${APP-app}_http_service
+        - traefik.http.services.${APP:-app}_http_service.loadbalancer.server.port=80
+        - traefik.http.routers.${APP:-app}_https_router.rule=Host(`pad.${DOMAIN:-tchartron.com}`)
+        - traefik.http.routers.${APP:-app}_https_router.entrypoints=https
+        - traefik.http.routers.${APP:-app}_https_router.middlewares=https-whitelist@file
+        - traefik.http.routers.${APP:-app}_https_router.tls=true
+        - traefik.http.routers.${APP:-app}_https_router.tls.certresolver=letsencrypt
+        - traefik.http.routers.${APP:-app}_https_router.tls.domains[0].main=pad.${DOMAIN:-tchartron.com}
+        - traefik.http.routers.${APP:-app}_https_router.service=${APP-app}_https_service
+        - traefik.http.services.${APP:-app}_https_service.loadbalancer.server.port=3000
+        # Sandbox
+        - traefik.http.routers.${APP:-app}_sb_http_router.rule=Host(`pad-sandbox.${DOMAIN:-tchartron.com}`)
+        - traefik.http.routers.${APP:-app}_sb_http_router.entrypoints=http
+        - traefik.http.routers.${APP:-app}_sb_http_router.middlewares=https-redirect@file
+        - traefik.http.routers.${APP:-app}_sb_http_router.service=${APP-app}_http_service
+        - traefik.http.services.${APP:-app}_sb_http_service.loadbalancer.server.port=80
+        - traefik.http.routers.${APP:-app}_sb_https_router.rule=Host(`pad-sandbox.${DOMAIN:-tchartron.com}`)
+        - traefik.http.routers.${APP:-app}_sb_https_router.entrypoints=https
+        - traefik.http.routers.${APP:-app}_sb_https_router.middlewares=https-whitelist@file
+        - traefik.http.routers.${APP:-app}_sb_https_router.tls=true
+        - traefik.http.routers.${APP:-app}_sb_https_router.tls.certresolver=letsencrypt
+        - traefik.http.routers.${APP:-app}_sb_https_router.tls.domains[0].main=pad-sandbox.${DOMAIN:-tchartron.com}
+        - traefik.http.routers.${APP:-app}_sb_https_router.service=${APP-app}_sb_https_service
+        - traefik.http.services.${APP:-app}_sb_https_service.loadbalancer.server.port=3001
+    volumes:
+      - ./volumes/blob:/cryptpad/blob
+      - ./volumes/block:/cryptpad/block
+      - ./volumes/customize:/cryptpad/customize
+      - ./volumes/data:/cryptpad/data
+      - ./volumes/files:/cryptpad/datastore
+      # - ./data/config.js:/cryptpad/config/config.js
+    depends_on:
+      - traefik
+    networks:
+      - default
+
+networks:
+  default:
+    name: cryptpad-network
+    driver: bridge
+    external: true

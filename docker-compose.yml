@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # --------------------------------------------------------------------------------------------------
+  # -------------------- CPAD ------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------------------------
+  cryptpad:
+    build:
+      context: .
+      dockerfile: cryptpad/Dockerfile
+      args:
+        - CRYPTPAD_VERSION=${CRYPTPAD_VERSION:-1.21.6}
+    container_name: ${APP:-app}-cyptpad
+    restart: unless-stopped
+    # environment:
+    #   - CPAD_MAIN_DOMAIN=${}
+    #   - CPAD_SANDBOX_DOMAIN=${}
+    #   - CPAD_NGINX_CONF=${}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./volumes/blob:/cryptpad/blob
+      - ./volumes/block:/cryptpad/block
+      - ./volumes/customize:/cryptpad/customize
+      - ./volumes/data:/cryptpad/data
+      - ./volumes/files:/cryptpad/datastore
+      - ./cryptpad/config.js:/cryptpad/config/config.js
+    networks:
+      - default
+
+  # # --------------------------------------------------------------------------------------------------
+  # # -------------------- NGINX -----------------------------------------------------------------------
+  # # --------------------------------------------------------------------------------------------------
+  # nginx:
+  #   # build:
+  #   #   context: .
+  #   #   dockerfile: cryptpad/Dockerfile
+  #   #   args:
+  #   #     - CRYPTPAD_VERSION=${CRYPTPAD_VERSION:-1.21.6}
+  #   image: nginx:1.23.3-alpine
+  #   container_name: ${APP:-app}-nginx
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
+
+  # --------------------------------------------------------------------------------------------------
+  # -------------------- SSL -------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------------------------
+  # This is a container used to create an endpoint for http challenge using L.E
+  # docker compose run --rm -it -e SERVER_NAME="pad.tchartron.com pad-sandbox.tchartron.com" ssl
+  # exec into container
+  # certbot --nginx -d pad.tchartron.com -d pad-sandbox.tchartron.com
+  # ssl:
+  #   build:
+  #     context: .
+  #     dockerfile: ssl/Dockerfile
+  #     args:
+  #       - NGINX_VERSION=${NGINX_VERSION:-1.23.3-alpine}
+  #   container_name: ${APP:-app}-ssl
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./letsencrypt:/etc/letsencrypt
+  #
+  # docker build -t registry.gitlab.com/devops0077/kubernetes-laravel/php-cli:0.0.1 -f docker/php/8.1-alpine3.16/Dockerfile --target cli .
+  # docker build -t nginx-ssl:0.0.1 -f ssl/Dockerfile .
+  # docker run --rm -it -e SERVER_NAME="pad.tchartron.com pad-sandbox.tchartron.com" -p 80:80/tcp --name nginx-ssl -v $(pwd):/letsencrypt nginx-ssl:0.0.1
+  # docker exec -it nginx-ssl certbot --nginx -d pad.tchartron.com -d pad-sandbox.tchartron.com
+
+networks:
+  default:
+    name: cryptpad-network
+    driver: bridge
+    external: true
